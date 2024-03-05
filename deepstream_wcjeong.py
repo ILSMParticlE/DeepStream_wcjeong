@@ -34,6 +34,9 @@ fps_streams = {}
 face_pool = []
 output_frame_num = 0
 
+# for OpenCv video capture
+output_frame_list = []
+
 class GETFPS:
     def __init__(self, stream_id):
         global start_time
@@ -169,11 +172,13 @@ def osd_sink_pad_buffer_probe(pad, info, user_data):
                 pyds.nvds_remove_frame_meta_from_batch(batch_meta, frame_meta)
             else:
                 cur_batch_frame_cnt += 1
-                global output_frame_num
-                frame_meta.frame_num = output_frame_num
+                global output_frame_num, output_frame_list
+                #frame_meta.frame_num = output_frame_num
                 output_frame_num += 1
-                #display_meta = pyds.nvds_acquire_display_meta_from_pool(batch_meta)
-                #pyds.nvds_remove_display_meta_from_frame(frame_meta, display_meta)
+
+                # For OpenCv video capture
+                output_frame_list.append(frame_meta.frame_num)
+                
         except StopIteration:
             break
 
@@ -572,7 +577,10 @@ def summarize():
         global STREAMMUX_WIDTH, STREAMMUX_HEIGHT
         STREAMMUX_WIDTH = vcap.get(cv2.CAP_PROP_FRAME_WIDTH)
         STREAMMUX_HEIGHT = vcap.get(cv2.CAP_PROP_FRAME_HEIGHT)
-        vcap.release()
+        #vcap.release()
+    else:
+        sys.stderr.write("Something wrong for source\n")
+        sys.exit(1)
 
 
     sys.stdout.write('\n')
@@ -688,7 +696,22 @@ def summarize():
     
     sys.stdout.write('\n')
 
-    return
+    output_video = cv2.VideoWriter("./output.mp4", cv2.VideoWriter_fourcc('m','p','4','v'), int(vcap.get(cv2.CAP_PROP_FPS)), (int(STREAMMUX_WIDTH), int(STREAMMUX_HEIGHT)))
+    output_frame_idx = 0
+    for frame_idx in range(int(vcap.get(cv2.CAP_PROP_FRAME_COUNT))):
+        ret, frame = vcap.read()
+        if not ret:
+            break
+        if output_frame_idx == len(output_frame_list):
+            break
+        
+        if frame_idx == output_frame_list[output_frame_idx]:
+            output_video.write(frame)
+            output_frame_idx += 1   
+
+
+    vcap.release()
+    output_video.release()
 
 
 def parse_args():
