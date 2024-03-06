@@ -17,7 +17,7 @@ import pyds
 MAX_ELEMENTS_IN_DISPLAY_META = 16
 
 SOURCE = ''
-CONFIG_INFER_PGIE = 'config_infer_primary_yoloV8_face.txt'
+CONFIG_INFER_PGIE = 'config_yoloV8_face.txt'
 CONFIG_INFER_SGIE = 'config_arcface.txt'
 STREAMMUX_BATCH_SIZE = 1
 STREAMMUX_WIDTH = 1920
