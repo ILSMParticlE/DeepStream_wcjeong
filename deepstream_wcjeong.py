@@ -32,7 +32,8 @@ start_time = time.time()
 fps_streams = {}
 
 face_pool = []
-output_frame_num = 0
+sim_face_obj_id = []
+#output_frame_num = 0
 
 # for OpenCv video capture
 output_frame_list = []
@@ -107,7 +108,7 @@ def osd_sink_pad_buffer_probe(pad, info, user_data):
     batch_meta = pyds.gst_buffer_get_nvds_batch_meta(hash(buf))
     l_frame = batch_meta.frame_meta_list
     cur_batch_frame_cnt = 0
-    global face_pool
+    global face_pool, sim_face_obj_id
 
     while l_frame:
         try:
@@ -118,7 +119,8 @@ def osd_sink_pad_buffer_probe(pad, info, user_data):
         l_obj = frame_meta.obj_meta_list
         remove_flag = True
         obj_cnt = 0
-        
+        user_cnt = 0
+
         while l_obj:
             try:
                 obj_meta = pyds.NvDsObjectMeta.cast(l_obj.data)
@@ -127,6 +129,8 @@ def osd_sink_pad_buffer_probe(pad, info, user_data):
 
             obj_cnt += 1
             #set_custom_bbox(obj_meta)
+            if obj_meta.object_id in sim_face_obj_id:
+                remove_flag = False
             
             l_obj_user = obj_meta.obj_user_meta_list
 
@@ -149,11 +153,14 @@ def osd_sink_pad_buffer_probe(pad, info, user_data):
                         sim = get_sim(face_tensor, face)
                         if sim > SIM_THRESHOLD:
                             remove_flag = False
+                            if obj_meta.object_id not in sim_face_obj_id:
+                                sim_face_obj_id.append(obj_meta.object_id)
                             #display_meta = pyds.nvds_acquire_display_meta_from_pool(batch_meta)
                             #pyds.nvds_remove_display_meta_from_frame(frame_meta, display_meta)
                             #pyds.nvds_clear_display_meta_list(frame_meta)
                             #set_custom_bbox(obj_meta)
                             break
+                user_cnt += 1
 
                 try:
                     l_obj_user = l_obj_user.next
@@ -165,7 +172,7 @@ def osd_sink_pad_buffer_probe(pad, info, user_data):
             except StopIteration:
                 break
         
-        print("frame : %d, obj_cnt : %d" % (frame_meta.frame_num, obj_cnt))
+        print("frame : %d, obj_cnt : %d, user_cnt ; %d" % (frame_meta.frame_num, obj_cnt, user_cnt))
         try:
             l_frame = l_frame.next
             if remove_flag:
@@ -173,8 +180,7 @@ def osd_sink_pad_buffer_probe(pad, info, user_data):
             else:
                 cur_batch_frame_cnt += 1
                 global output_frame_num, output_frame_list
-                #frame_meta.frame_num = output_frame_num
-                output_frame_num += 1
+                #output_frame_num += 1
 
                 # For OpenCv video capture
                 output_frame_list.append(frame_meta.frame_num)
@@ -695,7 +701,8 @@ def summarize():
     pipeline.set_state(Gst.State.NULL)
     
     sys.stdout.write('\n')
-
+    print(output_frame_list)
+    print(sim_face_obj_id)
     output_video = cv2.VideoWriter("./output.mp4", cv2.VideoWriter_fourcc('m','p','4','v'), int(vcap.get(cv2.CAP_PROP_FPS)), (int(STREAMMUX_WIDTH), int(STREAMMUX_HEIGHT)))
     output_frame_idx = 0
     for frame_idx in range(int(vcap.get(cv2.CAP_PROP_FRAME_COUNT))):
