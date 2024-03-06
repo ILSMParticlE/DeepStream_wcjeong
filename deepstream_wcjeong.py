@@ -24,7 +24,7 @@ STREAMMUX_WIDTH = 1920
 STREAMMUX_HEIGHT = 1080
 GPU_ID = 0
 PERF_MEASUREMENT_INTERVAL_SEC = 5
-SIM_THRESHOLD = 0.3
+SIM_THRESHOLD = 0.4
 TARGET_IMG_DIR = "./target"
 
 
@@ -37,6 +37,7 @@ sim_face_obj_id = []
 
 # for OpenCv video capture
 output_frame_list = []
+output_bbox_list = []
 
 class GETFPS:
     def __init__(self, stream_id):
@@ -108,7 +109,8 @@ def osd_sink_pad_buffer_probe(pad, info, user_data):
     batch_meta = pyds.gst_buffer_get_nvds_batch_meta(hash(buf))
     l_frame = batch_meta.frame_meta_list
     cur_batch_frame_cnt = 0
-    global face_pool, sim_face_obj_id
+    global face_pool, sim_face_obj_id, output_bbox_list
+    bboxes = []
 
     while l_frame:
         try:
@@ -131,6 +133,9 @@ def osd_sink_pad_buffer_probe(pad, info, user_data):
             #set_custom_bbox(obj_meta)
             if obj_meta.object_id in sim_face_obj_id:
                 remove_flag = False
+                #set_custom_bbox(obj_meta)
+                rect = obj_meta.rect_params
+                bboxes.append([rect.left, rect.top, rect.left+rect.width, rect.top+rect.height])
             
             l_obj_user = obj_meta.obj_user_meta_list
 
@@ -153,6 +158,9 @@ def osd_sink_pad_buffer_probe(pad, info, user_data):
                         sim = get_sim(face_tensor, face)
                         if sim > SIM_THRESHOLD:
                             remove_flag = False
+                            #set_custom_bbox(obj_meta)
+                            rect = obj_meta.rect_params
+                            bboxes.append([rect.left, rect.top, rect.left+rect.width, rect.top+rect.height])
                             if obj_meta.object_id not in sim_face_obj_id:
                                 sim_face_obj_id.append(obj_meta.object_id)
                             #display_meta = pyds.nvds_acquire_display_meta_from_pool(batch_meta)
@@ -172,7 +180,7 @@ def osd_sink_pad_buffer_probe(pad, info, user_data):
             except StopIteration:
                 break
         
-        print("frame : %d, obj_cnt : %d, user_cnt ; %d" % (frame_meta.frame_num, obj_cnt, user_cnt))
+        #print("frame : %d, obj_cnt : %d, user_cnt ; %d" % (frame_meta.frame_num, obj_cnt, user_cnt))
         try:
             l_frame = l_frame.next
             if remove_flag:
@@ -184,6 +192,7 @@ def osd_sink_pad_buffer_probe(pad, info, user_data):
 
                 # For OpenCv video capture
                 output_frame_list.append(frame_meta.frame_num)
+                output_bbox_list.append(bboxes)
                 
         except StopIteration:
             break
@@ -283,7 +292,6 @@ def osd_sink_pad_buffer_probe_face_pool(pad, info, user_data):
                 l_obj = l_obj.next
             except StopIteration:
                 break
-        print("frame : %d, obj_cnt : %d" % (frame_meta.frame_num, obj_cnt))
         try:
             l_frame = l_frame.next
         except StopIteration:
@@ -701,7 +709,7 @@ def summarize():
     pipeline.set_state(Gst.State.NULL)
     
     sys.stdout.write('\n')
-    print(output_frame_list)
+    #print(output_frame_list)
     print(sim_face_obj_id)
     output_video = cv2.VideoWriter("./output.mp4", cv2.VideoWriter_fourcc('m','p','4','v'), int(vcap.get(cv2.CAP_PROP_FPS)), (int(STREAMMUX_WIDTH), int(STREAMMUX_HEIGHT)))
     output_frame_idx = 0
@@ -713,6 +721,8 @@ def summarize():
             break
         
         if frame_idx == output_frame_list[output_frame_idx]:
+            for bbox in output_bbox_list[output_frame_idx]:
+                cv2.rectangle(frame, (int(bbox[0]), int(bbox[1])), (int(bbox[2]), int(bbox[3])), (0,0,255), 3)
             output_video.write(frame)
             output_frame_idx += 1   
 
