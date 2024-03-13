@@ -14,7 +14,6 @@ import cv2
 sys.path.append('/opt/nvidia/deepstream/deepstream/lib')
 import pyds
 
-MAX_ELEMENTS_IN_DISPLAY_META = 16
 
 SOURCE = ''
 CONFIG_INFER_PGIE = 'config_yoloV8_face.txt'
@@ -28,43 +27,13 @@ SIM_THRESHOLD = 0.4
 TARGET_IMG_DIR = "./target"
 
 
-start_time = time.time()
-fps_streams = {}
 
-face_pool = []
-sim_face_obj_id = []
-#output_frame_num = 0
+FACE_POOL = []
+SIM_FACE_OBJ_ID = []
 
 # for OpenCv video capture
-output_frame_list = []
-output_bbox_list = []
-
-class GETFPS:
-    def __init__(self, stream_id):
-        global start_time
-        self.start_time = start_time
-        self.is_first = True
-        self.frame_count = 0
-        self.stream_id = stream_id
-        self.total_fps_time = 0
-        self.total_frame_count = 0
-
-    def get_fps(self):
-        end_time = time.time()
-        if self.is_first:
-            self.start_time = end_time
-            self.is_first = False
-        current_time = end_time - self.start_time
-        if current_time > PERF_MEASUREMENT_INTERVAL_SEC:
-            self.total_fps_time = self.total_fps_time + current_time
-            self.total_frame_count = self.total_frame_count + self.frame_count
-            current_fps = float(self.frame_count) / current_time
-            avg_fps = float(self.total_frame_count) / self.total_fps_time
-            sys.stdout.write('DEBUG: FPS of stream %d: %.2f (%.2f)\n' % (self.stream_id + 1, current_fps, avg_fps))
-            self.start_time = end_time
-            self.frame_count = 0
-        else:
-            self.frame_count = self.frame_count + 1
+OUTPUT_FRAME_LIST = []
+OUTPUT_BBOX_LIST = []
 
 
 def set_custom_bbox(obj_meta):
@@ -109,8 +78,11 @@ def osd_sink_pad_buffer_probe(pad, info, user_data):
     batch_meta = pyds.gst_buffer_get_nvds_batch_meta(hash(buf))
     l_frame = batch_meta.frame_meta_list
     cur_batch_frame_cnt = 0
-    global face_pool, sim_face_obj_id, output_bbox_list
+    global FACE_POOL, SIM_FACE_OBJ_ID, OUTPUT_BBOX_LIST
+
+    ''' For openCv video creation'''
     bboxes = []
+    ''' End '''
 
     while l_frame:
         try:
@@ -130,12 +102,14 @@ def osd_sink_pad_buffer_probe(pad, info, user_data):
                 break
 
             obj_cnt += 1
-            #set_custom_bbox(obj_meta)
-            if obj_meta.object_id in sim_face_obj_id:
+            if obj_meta.object_id in SIM_FACE_OBJ_ID:
                 remove_flag = False
                 #set_custom_bbox(obj_meta)
+
+                ''' For opencv video creation '''
                 rect = obj_meta.rect_params
                 bboxes.append([rect.left, rect.top, rect.left+rect.width, rect.top+rect.height])
+                ''' End '''
             
             l_obj_user = obj_meta.obj_user_meta_list
 
@@ -154,15 +128,15 @@ def osd_sink_pad_buffer_probe(pad, info, user_data):
                         face_output.append(pyds.get_detections(layer.buffer, i))
                     face_tensor = np.reshape(face_output, (512, -1))
 
-                    for face in face_pool:
+                    for face in FACE_POOL:
                         sim = get_sim(face_tensor, face)
                         if sim > SIM_THRESHOLD:
                             remove_flag = False
                             #set_custom_bbox(obj_meta)
                             rect = obj_meta.rect_params
                             bboxes.append([rect.left, rect.top, rect.left+rect.width, rect.top+rect.height])
-                            if obj_meta.object_id not in sim_face_obj_id:
-                                sim_face_obj_id.append(obj_meta.object_id)
+                            if obj_meta.object_id not in SIM_FACE_OBJ_ID:
+                                SIM_FACE_OBJ_ID.append(obj_meta.object_id)
                             #display_meta = pyds.nvds_acquire_display_meta_from_pool(batch_meta)
                             #pyds.nvds_remove_display_meta_from_frame(frame_meta, display_meta)
                             #pyds.nvds_clear_display_meta_list(frame_meta)
@@ -187,12 +161,13 @@ def osd_sink_pad_buffer_probe(pad, info, user_data):
                 pyds.nvds_remove_frame_meta_from_batch(batch_meta, frame_meta)
             else:
                 cur_batch_frame_cnt += 1
-                global output_frame_num, output_frame_list
+                global output_frame_num, OUTPUT_FRAME_LIST
                 #output_frame_num += 1
 
-                # For OpenCv video capture
-                output_frame_list.append(frame_meta.frame_num)
-                output_bbox_list.append(bboxes)
+                ''' For OpenCv video creation '''
+                OUTPUT_FRAME_LIST.append(frame_meta.frame_num)
+                OUTPUT_BBOX_LIST.append(bboxes)
+                ''' End '''
                 
         except StopIteration:
             break
@@ -280,8 +255,8 @@ def osd_sink_pad_buffer_probe_face_pool(pad, info, user_data):
                     for i in range(layer.dims.d[0]):
                         face_output.append(pyds.get_detections(layer.buffer, i))
                     face_tensor = np.reshape(face_output, (512, -1))
-                    global face_pool
-                    face_pool.append(face_tensor)
+                    global FACE_POOL
+                    FACE_POOL.append(face_tensor)
 
                 try:
                     l_obj_user = l_obj_user.next
@@ -339,7 +314,6 @@ def create_uridecode_bin(stream_id, uri, streammux):
     streammux_sink_pad = streammux.get_request_pad(pad_name)
     bin.connect('pad-added', cb_newpad, streammux_sink_pad)
     bin.connect('child-added', decodebin_child_added, 0)
-    fps_streams['stream{0}'.format(stream_id)] = GETFPS(stream_id)
     return bin, streammux_sink_pad
 
 
@@ -406,7 +380,7 @@ def get_face_pool():
 
     sink = None
     if is_aarch64():
-        sink = Gst.ElementFactory.make('nv3dsink', 'nv3dsink')
+        sink = Gst.ElementFactory.make('fakesink', 'nv3dsink')
         if not sink:
             sys.stderr.write('ERROR: Failed to create nv3dsink\n')
             sys.exit(1)
@@ -470,8 +444,8 @@ def get_face_pool():
         pipeline.add(source_bin)
         img_height, img_width, img_layer = cv2.imread(TARGET_IMG_DIR + '/' + targets[idx]).shape
 
-        sys.stdout.write('\n#################################################################\n')
-        sys.stdout.write('img %d, %s : %d x %d\n' % (idx, targets[idx], img_width, img_height))
+        sys.stdout.write('\n#################################################################\n\n')
+        sys.stdout.write('img %d, %s : %d x %d\n\n' % (idx, targets[idx], img_width, img_height))
         sys.stdout.write('#################################################################\n\n')
 
         streammux.set_property('width', img_width)
@@ -489,8 +463,10 @@ def get_face_pool():
         streammux.release_request_pad(streammux_pad)
         pipeline.remove(source_bin)
 
-
-    sys.stdout.write("Successfully executed on %d targets\n" % len(face_pool))
+    
+    sys.stdout.write('\n#################################################################\n\n')
+    sys.stdout.write("Successfully executed on %d targets\n\n" % len(FACE_POOL))
+    sys.stdout.write('#################################################################\n\n')
     sys.stdout.write('\n')
 
 
@@ -541,6 +517,7 @@ def summarize():
         sys.stderr.write('ERROR: Failed to create nvdsosd\n')
         sys.exit(1)
 
+
     ''' For filesink '''
     converter2 = Gst.ElementFactory.make("nvvideoconvert", "converter2")
     
@@ -575,7 +552,8 @@ def summarize():
     # Create sink
     sink = None
     if is_aarch64():
-        sink = Gst.ElementFactory.make('nv3dsink', 'nv3dsink')
+        sink = Gst.ElementFactory.make('filesink', 'nv3dsink')
+        sink.set_property("location", "./out.mp4")
         if not sink:
             sys.stderr.write('ERROR: Failed to create nv3dsink\n')
             sys.exit(1)
@@ -585,7 +563,10 @@ def summarize():
         if not sink:
             sys.stderr.write('ERROR: Failed to create nveglglessink\n')
             sys.exit(1)
+    ''' End '''
     
+
+    ''' For opencv video creation '''
     if 'file://' in SOURCE:
         vcap = cv2.VideoCapture(SOURCE[7:])
         global STREAMMUX_WIDTH, STREAMMUX_HEIGHT
@@ -595,6 +576,7 @@ def summarize():
     else:
         sys.stderr.write("Something wrong for source\n")
         sys.exit(1)
+    ''' End '''
 
 
     sys.stdout.write('\n')
@@ -709,26 +691,28 @@ def summarize():
     pipeline.set_state(Gst.State.NULL)
     
     sys.stdout.write('\n')
-    #print(output_frame_list)
-    print(sim_face_obj_id)
+
+    ''' For opencv video creation '''
+    #print(OUTPUT_FRAME_LIST)
+    print(SIM_FACE_OBJ_ID)
     output_video = cv2.VideoWriter("./output.mp4", cv2.VideoWriter_fourcc('m','p','4','v'), int(vcap.get(cv2.CAP_PROP_FPS)), (int(STREAMMUX_WIDTH), int(STREAMMUX_HEIGHT)))
     output_frame_idx = 0
     for frame_idx in range(int(vcap.get(cv2.CAP_PROP_FRAME_COUNT))):
         ret, frame = vcap.read()
         if not ret:
             break
-        if output_frame_idx == len(output_frame_list):
+        if output_frame_idx == len(OUTPUT_FRAME_LIST):
             break
         
-        if frame_idx == output_frame_list[output_frame_idx]:
-            for bbox in output_bbox_list[output_frame_idx]:
+        if frame_idx == OUTPUT_FRAME_LIST[output_frame_idx]:
+            for bbox in OUTPUT_BBOX_LIST[output_frame_idx]:
                 cv2.rectangle(frame, (int(bbox[0]), int(bbox[1])), (int(bbox[2]), int(bbox[3])), (0,0,255), 3)
             output_video.write(frame)
             output_frame_idx += 1   
 
-
     vcap.release()
     output_video.release()
+    ''' End '''
 
 
 def parse_args():
