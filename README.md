@@ -6,7 +6,23 @@ Video summarization via face detection &amp; recognition with Deepstream
 
 ### Demo
 
-video
+#### Target image
+<img src = "https://github.com/ILSMParticlE/Deepstream_wcjeong/assets/20856552/99d2d043-4260-45cc-bcf1-2f142c4d5f74" width="20%" height="20%">
+
+##
+
+#### Source video
+
+https://github.com/ILSMParticlE/Deepstream_wcjeong/assets/20856552/bc4907f1-fb0f-44f2-8f0c-32fcebabd4f1
+
+##
+
+#### Tracked result
+
+  
+https://github.com/ILSMParticlE/Deepstream_wcjeong/assets/20856552/215e6496-b275-4da9-ae52-aae4fffd3aaa
+
+
 
 ##
 
