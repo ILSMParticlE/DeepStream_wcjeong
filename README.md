@@ -13,9 +13,17 @@ video
 ### Requirement
 
 * Deepstream 6.4
+  
+  Reference: https://docs.nvidia.com/metropolis/deepstream/dev-guide/text/DS_Quickstart.html
 * Deepstream Python Bindings
+  
+  Reference : https://github.com/NVIDIA-AI-IOT/deepstream_python_apps
 * Detection Model(YoloV8-face)
+  
+  Please refer to https://github.com/marcoslucianops/DeepStream-Yolo-Face/blob/master/docs/YOLOv8_Face.md
 * Recognition Model(Arcface)
+  
+  You can get pretrained model from [Insightface](https://github.com/deepinsight/insightface)), or can download pretrained ONNX file via omz_downloader
 
 ##
 
