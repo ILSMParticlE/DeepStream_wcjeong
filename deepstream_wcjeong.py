@@ -27,13 +27,9 @@ SIM_THRESHOLD = 0.4
 TARGET_IMG_DIR = "./target"
 
 
-
 FACE_POOL = []
 SIM_FACE_OBJ_ID = []
-
-# for OpenCv video capture
-OUTPUT_FRAME_LIST = []
-OUTPUT_BBOX_LIST = []
+OBJ_FRAME_LIST = {}
 
 
 def set_custom_bbox(obj_meta):
@@ -78,11 +74,7 @@ def osd_sink_pad_buffer_probe(pad, info, user_data):
     batch_meta = pyds.gst_buffer_get_nvds_batch_meta(hash(buf))
     l_frame = batch_meta.frame_meta_list
     cur_batch_frame_cnt = 0
-    global FACE_POOL, SIM_FACE_OBJ_ID, OUTPUT_BBOX_LIST
-
-    ''' For openCv video creation'''
-    bboxes = []
-    ''' End '''
+    global FACE_POOL, SIM_FACE_OBJ_ID, OBJ_FRAME_LIST
 
     while l_frame:
         try:
@@ -91,9 +83,7 @@ def osd_sink_pad_buffer_probe(pad, info, user_data):
             break
 
         l_obj = frame_meta.obj_meta_list
-        remove_flag = True
         obj_cnt = 0
-        user_cnt = 0
 
         while l_obj:
             try:
@@ -102,16 +92,13 @@ def osd_sink_pad_buffer_probe(pad, info, user_data):
                 break
 
             obj_cnt += 1
-            if obj_meta.object_id in SIM_FACE_OBJ_ID:
-                remove_flag = False
-                #set_custom_bbox(obj_meta)
+            if obj_meta.object_id not in OBJ_FRAME_LIST:
+                OBJ_FRAME_LIST[obj_meta.object_id] = []
+            OBJ_FRAME_LIST[obj_meta.object_id].append(frame_meta.frame_num)
 
-                ''' For opencv video creation '''
-                rect = obj_meta.rect_params
-                bboxes.append([rect.left, rect.top, rect.left+rect.width, rect.top+rect.height])
-                ''' End '''
             
             l_obj_user = obj_meta.obj_user_meta_list
+            user_cnt = 0
 
             while l_obj_user:
                 try:
@@ -119,6 +106,7 @@ def osd_sink_pad_buffer_probe(pad, info, user_data):
                 except StopIteration:
                     break
 
+                user_cnt += 1
                 if obj_user_meta.base_meta.meta_type == pyds.NvDsMetaType.NVDSINFER_TENSOR_OUTPUT_META:
                     tensor_meta = pyds.NvDsInferTensorMeta.cast(obj_user_meta.user_meta_data)
                     layer = pyds.get_nvds_LayerInfo(tensor_meta, 0)
@@ -131,48 +119,27 @@ def osd_sink_pad_buffer_probe(pad, info, user_data):
                     for face in FACE_POOL:
                         sim = get_sim(face_tensor, face)
                         if sim > SIM_THRESHOLD:
-                            remove_flag = False
-                            #set_custom_bbox(obj_meta)
-                            rect = obj_meta.rect_params
-                            bboxes.append([rect.left, rect.top, rect.left+rect.width, rect.top+rect.height])
                             if obj_meta.object_id not in SIM_FACE_OBJ_ID:
                                 SIM_FACE_OBJ_ID.append(obj_meta.object_id)
-                            #display_meta = pyds.nvds_acquire_display_meta_from_pool(batch_meta)
-                            #pyds.nvds_remove_display_meta_from_frame(frame_meta, display_meta)
-                            #pyds.nvds_clear_display_meta_list(frame_meta)
-                            #set_custom_bbox(obj_meta)
-                            break
-                user_cnt += 1
 
                 try:
                     l_obj_user = l_obj_user.next
                 except StopIteration:
                     break
 
+            #print("frame : %d, obj : %d, user_cnt ; %d" % (frame_meta.frame_num, obj_cnt, user_cnt))
             try:
                 l_obj = l_obj.next
             except StopIteration:
                 break
         
-        #print("frame : %d, obj_cnt : %d, user_cnt ; %d" % (frame_meta.frame_num, obj_cnt, user_cnt))
         try:
             l_frame = l_frame.next
-            if remove_flag:
-                pyds.nvds_remove_frame_meta_from_batch(batch_meta, frame_meta)
-            else:
-                cur_batch_frame_cnt += 1
-                global output_frame_num, OUTPUT_FRAME_LIST
-                #output_frame_num += 1
-
-                ''' For OpenCv video creation '''
-                OUTPUT_FRAME_LIST.append(frame_meta.frame_num)
-                OUTPUT_BBOX_LIST.append(bboxes)
-                ''' End '''
                 
         except StopIteration:
             break
 
-    '''
+    ''' 
     # search from past frame
     l_user = batch_meta.batch_user_meta_list
     
@@ -192,11 +159,9 @@ def osd_sink_pad_buffer_probe(pad, info, user_data):
             for misc_data_stream in pyds.NvDsTargetMiscDataBatch.list(past_data_batch):
                 #print("streamId = ", misc_data_stream.streamID)
                 #print("surfaceStreamID = ", misc_data_stream.surfaceStreamID)
-                continue
 
                 for misc_data_obj in pyds.NvDsTargetMiscDataStream.list(misc_data_stream):
                     #f.write("numobj = %d\n" % (misc_data_obj.numObj))
-                    continue
                     
                     for misc_data_frame in pyds.NvDsTargetMiscDataObject.list(misc_data_obj):
                         #f.write("frameNum = %d\n" %(misc_data_frame.frameNum))
@@ -209,8 +174,7 @@ def osd_sink_pad_buffer_probe(pad, info, user_data):
         except StopIteration:
             break
     '''
-    if not cur_batch_frame_cnt:
-        return Gst.PadProbeReturn.DROP
+    
     return Gst.PadProbeReturn.OK
 
 
@@ -517,8 +481,13 @@ def summarize():
         sys.stderr.write('ERROR: Failed to create nvdsosd\n')
         sys.exit(1)
 
+    sink = Gst.ElementFactory.make('fakesink', 'fakesink')
+    if not sink:
+        sys.stderr.write("ERROR: Failed to create sink\n")
+        sys.exit(1)
 
     ''' For filesink '''
+    '''
     converter2 = Gst.ElementFactory.make("nvvideoconvert", "converter2")
     
     capsfilter = Gst.ElementFactory.make("capsfilter", "capsfilter")
@@ -550,33 +519,23 @@ def summarize():
     
     
     # Create sink
-    sink = None
-    if is_aarch64():
-        sink = Gst.ElementFactory.make('filesink', 'nv3dsink')
-        sink.set_property("location", "./out.mp4")
-        if not sink:
-            sys.stderr.write('ERROR: Failed to create nv3dsink\n')
-            sys.exit(1)
-    else:
-        sink = Gst.ElementFactory.make('filesink', 'nveglglessink')
-        sink.set_property("location", "./out.mp4")
-        if not sink:
-            sys.stderr.write('ERROR: Failed to create nveglglessink\n')
-            sys.exit(1)
+    sink = Gst.ElementFactory.make('filesink', 'filesink')
+    sink.set_property("location", "./out.mp4")
+    if not sink:
+        sys.stderr.write('ERROR: Failed to create nv3dsink\n')
+        sys.exit(1)
+    '''
     ''' End '''
     
 
-    ''' For opencv video creation '''
     if 'file://' in SOURCE:
         vcap = cv2.VideoCapture(SOURCE[7:])
         global STREAMMUX_WIDTH, STREAMMUX_HEIGHT
         STREAMMUX_WIDTH = vcap.get(cv2.CAP_PROP_FRAME_WIDTH)
         STREAMMUX_HEIGHT = vcap.get(cv2.CAP_PROP_FRAME_HEIGHT)
-        #vcap.release()
     else:
         sys.stderr.write("Something wrong for source\n")
         sys.exit(1)
-    ''' End '''
 
 
     sys.stdout.write('\n')
@@ -617,6 +576,7 @@ def summarize():
     sink.set_property('sync', 1)
     sink.set_property('qos', 0)
 
+
     if 'file://' in SOURCE:
         streammux.set_property('live-source', 0)
 
@@ -636,6 +596,23 @@ def summarize():
         osd.set_property('gpu_id', GPU_ID)
 
 
+    pipeline.add(pgie)
+    pipeline.add(tracker)
+    pipeline.add(sgie)
+    pipeline.add(converter)
+    pipeline.add(osd)
+    pipeline.add(sink)
+
+    streammux.link(pgie)
+    pgie.link(tracker)
+    tracker.link(sgie)
+    sgie.link(converter)
+    converter.link(osd)
+    osd.link(sink)
+
+
+    ''' For filesink '''
+    '''
     pipeline.add(pgie)
     pipeline.add(tracker)
     pipeline.add(sgie)
@@ -668,16 +645,19 @@ def summarize():
     
     codeparser_src_pad.link(container_video_sink_pad)
     container.link(sink)
-
+    '''
+    ''' End '''
 
     bus = pipeline.get_bus()
     bus.add_signal_watch()
     bus.connect('message', bus_call, loop)
-
+    
+    
     osd_sink_pad = osd.get_static_pad("sink")
     if not osd_sink_pad:
-        sys.stderr.write("Unable to get sink pd of osd\n")
+        sys.stderr.write("Unable to get sink pad of osd\n")
     osd_sink_pad.add_probe(Gst.PadProbeType.BUFFER, osd_sink_pad_buffer_probe, 0)
+
 
     pipeline.set_state(Gst.State.PLAYING)
 
@@ -692,27 +672,29 @@ def summarize():
     
     sys.stdout.write('\n')
 
-    ''' For opencv video creation '''
     #print(OUTPUT_FRAME_LIST)
     print(SIM_FACE_OBJ_ID)
     output_video = cv2.VideoWriter("./output.mp4", cv2.VideoWriter_fourcc('m','p','4','v'), int(vcap.get(cv2.CAP_PROP_FPS)), (int(STREAMMUX_WIDTH), int(STREAMMUX_HEIGHT)))
+    output_frame_list = []
+    for obj_id in SIM_FACE_OBJ_ID:
+        output_frame_list += OBJ_FRAME_LIST[obj_id]
+    output_frame_list.sort()
+    print(output_frame_list)
+
     output_frame_idx = 0
     for frame_idx in range(int(vcap.get(cv2.CAP_PROP_FRAME_COUNT))):
         ret, frame = vcap.read()
         if not ret:
             break
-        if output_frame_idx == len(OUTPUT_FRAME_LIST):
+        if output_frame_idx == len(output_frame_list):
             break
         
-        if frame_idx == OUTPUT_FRAME_LIST[output_frame_idx]:
-            for bbox in OUTPUT_BBOX_LIST[output_frame_idx]:
-                cv2.rectangle(frame, (int(bbox[0]), int(bbox[1])), (int(bbox[2]), int(bbox[3])), (0,0,255), 3)
+        if frame_idx == output_frame_list[output_frame_idx]:
             output_video.write(frame)
-            output_frame_idx += 1   
+            output_frame_idx += 1
 
     vcap.release()
     output_video.release()
-    ''' End '''
 
 
 def parse_args():
