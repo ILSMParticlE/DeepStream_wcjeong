@@ -672,14 +672,14 @@ def summarize():
     
     sys.stdout.write('\n')
 
-    #print(OUTPUT_FRAME_LIST)
-    print(SIM_FACE_OBJ_ID)
+    #print(SIM_FACE_OBJ_ID)
     output_video = cv2.VideoWriter("./output.mp4", cv2.VideoWriter_fourcc('m','p','4','v'), int(vcap.get(cv2.CAP_PROP_FPS)), (int(STREAMMUX_WIDTH), int(STREAMMUX_HEIGHT)))
     output_frame_list = []
     for obj_id in SIM_FACE_OBJ_ID:
         output_frame_list += OBJ_FRAME_LIST[obj_id]
+    output_frame_list = list(set(output_frame_list))
     output_frame_list.sort()
-    print(output_frame_list)
+    #print(output_frame_list)
 
     output_frame_idx = 0
     for frame_idx in range(int(vcap.get(cv2.CAP_PROP_FRAME_COUNT))):
