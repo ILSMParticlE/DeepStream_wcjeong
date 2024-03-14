@@ -39,7 +39,7 @@ https://github.com/ILSMParticlE/Deepstream_wcjeong/assets/20856552/215e6496-b275
   Please refer to https://github.com/marcoslucianops/DeepStream-Yolo-Face/blob/master/docs/YOLOv8_Face.md
 * Recognition Model(Arcface)
   
-  You can get pretrained model from [Insightface](https://github.com/deepinsight/insightface)), or can download pretrained ONNX file via omz_downloader
+  You can get pretrained model from [Insightface](https://github.com/deepinsight/insightface), or can download pretrained ONNX file via omz_downloader
 
 ##
 
