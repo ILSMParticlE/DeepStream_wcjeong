@@ -18,10 +18,12 @@ https://github.com/ILSMParticlE/Deepstream_wcjeong/assets/20856552/bc4907f1-fb0f
 ##
 
 #### Tracked result
+ 
 
-  
-https://github.com/ILSMParticlE/Deepstream_wcjeong/assets/20856552/215e6496-b275-4da9-ae52-aae4fffd3aaa
+https://github.com/ILSMParticlE/Deepstream_wcjeong/assets/20856552/f04c7312-8f54-4be4-94df-3c5098bdac31
 
+
+  * You can extract part of the video that contains target.
 
 
 ##
