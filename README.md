@@ -14,7 +14,7 @@ Video summarization via face detection &amp; recognition with Deepstream
 #### Source video
 
 https://github.com/ILSMParticlE/Deepstream_wcjeong/assets/20856552/bc4907f1-fb0f-44f2-8f0c-32fcebabd4f1
-
+  * source : https://www.pexels.com/video/people-going-in-and-out-of-the-royal-opera-house-1721303/
 ##
 
 #### Tracked result
