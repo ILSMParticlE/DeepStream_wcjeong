@@ -12,6 +12,7 @@ Video summarization via face detection &amp; recognition with Deepstream
 -->
 <img src = "https://github.com/ILSMParticlE/DeepStream_wcjeong/assets/20856552/044e73d3-4eab-4a85-adb4-66bf5b077ee5" width="20%" height="20%">
 
+ * source : https://ko.wikipedia.org/wiki/%EC%BD%94%EB%82%9C_%EC%98%A4%EB%B8%8C%EB%9D%BC%EC%9D%B4%EC%96%B8
 
 ##
 
