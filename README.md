@@ -26,6 +26,10 @@ https://github.com/ILSMParticlE/Deepstream_wcjeong/assets/20856552/f04c7312-8f54
   * You can extract part of the video that contains target.
 
 
+
+
+[![Video Label](http://img.youtube.com/vi/-7tX559lsgc/0.jpg)](https://youtu.be/-7tX559lsgc)
+
 ##
 
 ### Requirement
